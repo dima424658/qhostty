@@ -223,18 +223,23 @@ void TerminalTab::toggleZoom() {
   updateZoomVisibility();
 }
 
-bool TerminalTab::canClose() const {
+bool TerminalTab::needsCloseConfirmation() const {
   for (TerminalWidget* terminal : terminals()) {
     if (terminal->surface() != nullptr &&
         ghostty_surface_needs_confirm_quit(terminal->surface())) {
-      const auto answer = QMessageBox::question(
-          const_cast<TerminalTab*>(this), tr("Close tab?"),
-          tr("One or more processes are still running in this tab."),
-          QMessageBox::Close | QMessageBox::Cancel, QMessageBox::Cancel);
-      return answer == QMessageBox::Close;
+      return true;
     }
   }
-  return true;
+  return false;
+}
+
+bool TerminalTab::canClose() const {
+  return !needsCloseConfirmation() ||
+         QMessageBox::question(
+             const_cast<TerminalTab*>(this), tr("Close tab?"),
+             tr("One or more processes are still running in this tab."),
+             QMessageBox::Close | QMessageBox::Cancel, QMessageBox::Cancel) ==
+             QMessageBox::Close;
 }
 
 void TerminalTab::connectTerminal(TerminalWidget* terminal) {
