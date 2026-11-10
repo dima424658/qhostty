@@ -71,13 +71,22 @@ TerminalWidget* TerminalTab::newSplit(
                       direction == GHOSTTY_SPLIT_DIRECTION_UP;
   const Qt::Orientation orientation =
       horizontal ? Qt::Horizontal : Qt::Vertical;
+  const int sourceExtent = horizontal ? source->width() : source->height();
 
   if (auto* parentSplitter = qobject_cast<QSplitter*>(source->parentWidget());
       parentSplitter != nullptr &&
       parentSplitter->orientation() == orientation) {
     const int sourceIndex = parentSplitter->indexOf(source);
-    parentSplitter->insertWidget(before ? sourceIndex : sourceIndex + 1,
-                                 terminal);
+    QList<int> sizes = parentSplitter->sizes();
+    const int available = qMax(0, sizes.at(sourceIndex) -
+                                     parentSplitter->handleWidth());
+    // Divide only the source pane, keeping the other panes at their
+    // existing sizes instead of letting QSplitter use the new size hint.
+    sizes[sourceIndex] = available / 2;
+    const int insertIndex = before ? sourceIndex : sourceIndex + 1;
+    sizes.insert(insertIndex, available - available / 2);
+    parentSplitter->insertWidget(insertIndex, terminal);
+    parentSplitter->setSizes(sizes);
   } else {
     auto* splitter = new QSplitter(orientation);
     splitter->setChildrenCollapsible(false);
@@ -98,7 +107,11 @@ TerminalWidget* TerminalTab::newSplit(
       splitter->addWidget(source);
       splitter->addWidget(terminal);
     }
-    splitter->setSizes({1, 1});
+    // setSizes takes pixels: {1, 1} is clamped to each child's minimum
+    // before being scaled, which can give an initialized surface almost
+    // all the space while the new surface is still starting up.
+    const int available = qMax(0, sourceExtent - splitter->handleWidth());
+    splitter->setSizes({available / 2, available - available / 2});
   }
 
   setActive(terminal);
